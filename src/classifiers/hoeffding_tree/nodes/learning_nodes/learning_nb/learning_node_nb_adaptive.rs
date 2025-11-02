@@ -242,3 +242,184 @@ impl LearningNode for LearningNodeNBAdaptive {
         self.super_learn_from_instance(instance, hoeffding_tree)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::classifiers::HoeffdingTree;
+    use crate::classifiers::hoeffding_tree::LeafPredictionOption;
+    use crate::core::attributes::Attribute;
+    use crate::core::instance_header::InstanceHeader;
+    use std::io::Error;
+
+    struct MockInstance {
+        values: Vec<f64>,
+        class_idx: usize,
+        class_val: Option<f64>,
+        weight: f64,
+    }
+
+    impl MockInstance {
+        fn new(values: Vec<f64>, class_idx: usize, class_val: Option<f64>, weight: f64) -> Self {
+            Self {
+                values,
+                class_idx,
+                class_val,
+                weight,
+            }
+        }
+    }
+
+    impl Instance for MockInstance {
+        fn weight(&self) -> f64 {
+            self.weight
+        }
+        fn set_weight(&mut self, _new_value: f64) -> Result<(), Error> {
+            Ok(())
+        }
+        fn value_at_index(&self, index: usize) -> Option<f64> {
+            self.values.get(index).copied()
+        }
+        fn set_value_at_index(&mut self, _index: usize, _new_value: f64) -> Result<(), Error> {
+            Ok(())
+        }
+        fn is_missing_at_index(&self, _index: usize) -> Result<bool, Error> {
+            Ok(false)
+        }
+        fn attribute_at_index(&self, _index: usize) -> Option<&dyn Attribute> {
+            None
+        }
+        fn index_of_attribute(&self, _attribute: &dyn Attribute) -> Option<usize> {
+            None
+        }
+        fn number_of_attributes(&self) -> usize {
+            self.values.len()
+        }
+        fn class_index(&self) -> usize {
+            self.class_idx
+        }
+        fn class_value(&self) -> Option<f64> {
+            self.class_val
+        }
+        fn set_class_value(&mut self, _new_value: f64) -> Result<(), Error> {
+            Ok(())
+        }
+        fn is_class_missing(&self) -> bool {
+            false
+        }
+        fn number_of_classes(&self) -> usize {
+            2
+        }
+        fn to_vec(&self) -> Vec<f64> {
+            self.values.clone()
+        }
+        fn header(&self) -> &InstanceHeader {
+            unimplemented!()
+        }
+    }
+
+    struct MockSplitCriterion;
+
+    impl SplitCriterion for MockSplitCriterion {
+        fn get_merit_of_split(&self, _pre: &[f64], _post: &[Vec<f64>]) -> f64 {
+            42.0
+        }
+        fn get_range_of_merit(&self, _pre: &Vec<f64>) -> f64 {
+            1.0
+        }
+    }
+
+    #[test]
+    fn test_initialization_and_weight_sum() {
+        let node = LearningNodeNBAdaptive::new(vec![2.0, 3.0]);
+        assert_eq!(node.get_weight_seen(), 5.0);
+        assert_eq!(node.get_weight_seen_at_last_split_evaluation(), 5.0);
+    }
+
+    #[test]
+    fn test_num_non_zero_entries() {
+        let v = vec![0.0, 1.0, 2.0, 0.0];
+        assert_eq!(LearningNodeNBAdaptive::num_non_zero_entries(&v), 2);
+    }
+
+    #[test]
+    fn test_max_index() {
+        assert!(LearningNodeNBAdaptive::max_index(&vec![0.1, 2.5, 1.0]) == Some(1));
+        assert_eq!(LearningNodeNBAdaptive::max_index(&[]), None);
+    }
+
+    #[test]
+    fn test_learn_from_instance_expands_distribution() {
+        let mut node = LearningNodeNBAdaptive::new(vec![0.0]);
+        let tree =
+            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::AdaptiveNaiveBayes);
+        let instance = MockInstance::new(vec![1.0, 2.0], 1, Some(3.0), 2.0);
+        node.learn_from_instance(&instance, &tree);
+
+        assert_eq!(node.get_observed_class_distribution().len(), 4);
+        assert_eq!(node.get_observed_class_distribution()[3], 2.0);
+    }
+
+    #[test]
+    fn test_get_class_votes_uses_mc_or_nb() {
+        let mut node = LearningNodeNBAdaptive::new(vec![5.0, 2.0]);
+        let instance = MockInstance::new(vec![0.0, 1.0], 1, Some(1.0), 1.0);
+        let tree =
+            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::AdaptiveNaiveBayes);
+
+        node.mc_correct_weight = 10.0;
+        node.nb_correct_weight = 5.0;
+        let votes_mc = node.get_class_votes(&instance, &tree);
+        assert_eq!(votes_mc, vec![5.0, 2.0]);
+
+        node.mc_correct_weight = 2.0;
+        node.nb_correct_weight = 10.0;
+        let votes_nb = node.get_class_votes(&instance, &tree);
+        assert_eq!(votes_nb.len(), 2);
+    }
+
+    #[test]
+    fn test_learn_from_instance_updates_correct_weights() {
+        let mut node = LearningNodeNBAdaptive::new(vec![1.0, 5.0]);
+        let tree =
+            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::AdaptiveNaiveBayes);
+        let instance = MockInstance::new(vec![0.0, 1.0], 1, Some(1.0), 1.0);
+
+        node.learn_from_instance(&instance, &tree);
+
+        assert!(node.mc_correct_weight > 0.0);
+        assert!(node.nb_correct_weight >= 0.0);
+    }
+
+    #[test]
+    fn test_get_best_split_suggestions_returns_nonempty() {
+        let node = LearningNodeNBAdaptive::new(vec![1.0, 1.0]);
+        let tree =
+            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::AdaptiveNaiveBayes);
+        let criterion = MockSplitCriterion;
+
+        let suggestions = node.get_best_split_suggestions(&criterion, &tree);
+        assert!(!suggestions.is_empty());
+        assert_eq!(suggestions[0].get_merit(), 42.0);
+    }
+
+    #[test]
+    fn test_calc_byte_size_nonzero() {
+        let node = LearningNodeNBAdaptive::new(vec![1.0, 2.0, 3.0]);
+        let size = node.calc_byte_size();
+        assert!(size > 0);
+    }
+
+    #[test]
+    fn test_filter_instance_to_leaf_returns_self() {
+        let node = Rc::new(RefCell::new(LearningNodeNBAdaptive::new(vec![1.0])));
+        let instance = MockInstance::new(vec![1.0], 0, Some(0.0), 1.0);
+        let found = node.borrow().filter_instance_to_leaf(
+            node.clone() as Rc<RefCell<dyn Node>>,
+            &instance,
+            None,
+            0,
+        );
+        assert!(found.get_node().is_some());
+    }
+}
