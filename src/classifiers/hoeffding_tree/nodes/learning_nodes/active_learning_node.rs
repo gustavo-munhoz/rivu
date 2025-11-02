@@ -211,3 +211,186 @@ impl LearningNode for ActiveLearningNode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::classifiers::hoeffding_tree::LeafPredictionOption;
+    use crate::core::attributes::Attribute;
+    use crate::core::instance_header::InstanceHeader;
+    use std::io::Error;
+
+    struct MockInstance {
+        values: Vec<f64>,
+        class_idx: usize,
+        class_val: Option<f64>,
+        weight: f64,
+    }
+    impl MockInstance {
+        fn new(values: Vec<f64>, class_idx: usize, class_val: Option<f64>, weight: f64) -> Self {
+            Self {
+                values,
+                class_idx,
+                class_val,
+                weight,
+            }
+        }
+    }
+
+    impl Instance for MockInstance {
+        fn weight(&self) -> f64 {
+            self.weight
+        }
+        fn set_weight(&mut self, _new_value: f64) -> Result<(), Error> {
+            Ok(())
+        }
+        fn value_at_index(&self, index: usize) -> Option<f64> {
+            self.values.get(index).copied()
+        }
+        fn set_value_at_index(&mut self, _index: usize, _new_value: f64) -> Result<(), Error> {
+            Ok(())
+        }
+        fn is_missing_at_index(&self, _index: usize) -> Result<bool, Error> {
+            Ok(false)
+        }
+        fn attribute_at_index(&self, _index: usize) -> Option<&dyn Attribute> {
+            None
+        }
+        fn index_of_attribute(&self, _attribute: &dyn Attribute) -> Option<usize> {
+            None
+        }
+        fn number_of_attributes(&self) -> usize {
+            self.values.len()
+        }
+        fn class_index(&self) -> usize {
+            self.class_idx
+        }
+        fn class_value(&self) -> Option<f64> {
+            self.class_val
+        }
+        fn set_class_value(&mut self, _new_value: f64) -> Result<(), Error> {
+            Ok(())
+        }
+        fn is_class_missing(&self) -> bool {
+            false
+        }
+        fn number_of_classes(&self) -> usize {
+            2
+        }
+        fn to_vec(&self) -> Vec<f64> {
+            self.values.clone()
+        }
+        fn header(&self) -> &InstanceHeader {
+            unimplemented!()
+        }
+    }
+
+    struct MockSplitCriterion {
+        last_called: RefCell<usize>,
+    }
+
+    impl MockSplitCriterion {
+        fn new() -> Self {
+            Self {
+                last_called: RefCell::new(0),
+            }
+        }
+    }
+
+    impl SplitCriterion for MockSplitCriterion {
+        fn get_range_of_merit(&self, _pre: &Vec<f64>) -> f64 {
+            1.0
+        }
+        fn get_merit_of_split(&self, _pre: &[f64], _post: &[Vec<f64>]) -> f64 {
+            let mut v = self.last_called.borrow_mut();
+            *v += 1;
+            *v as f64
+        }
+    }
+
+    #[test]
+    fn test_initialization_and_weight_sum() {
+        let node = ActiveLearningNode::new(vec![2.0, 3.0]);
+        assert_eq!(node.get_weight_seen(), 5.0);
+        assert_eq!(node.get_weight_seen_at_last_split_evaluation(), 5.0);
+    }
+
+    #[test]
+    fn test_observed_class_distribution_is_pure_and_impure() {
+        let pure = ActiveLearningNode::new(vec![5.0, 0.0]);
+        let impure = ActiveLearningNode::new(vec![3.0, 1.0]);
+        assert!(pure.observed_class_distribution_is_pure());
+        assert!(!impure.observed_class_distribution_is_pure());
+    }
+
+    #[test]
+    fn test_learn_from_instance_expands_distribution() {
+        let mut node = ActiveLearningNode::new(vec![0.0]);
+        let tree =
+            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::MajorityClass);
+
+        let instance = MockInstance::new(vec![1.0, 2.0], 1, Some(4.0), 1.0);
+
+        node.learn_from_instance(&instance, &tree);
+        assert_eq!(node.get_observed_class_distribution().len(), 5);
+        assert_eq!(node.get_observed_class_distribution()[4], 1.0);
+    }
+
+    #[test]
+    fn test_disable_attribute_replaces_with_null_observer() {
+        let mut node = ActiveLearningNode::new(vec![1.0, 2.0]);
+
+        node.attribute_observers = vec![None, None];
+        node.disable_attribute(1);
+
+        assert!(
+            node.attribute_observers[1]
+                .as_ref()
+                .unwrap()
+                .as_any()
+                .is::<NullAttributeClassObserver>()
+        );
+    }
+
+    #[test]
+    fn test_calculate_promise() {
+        let node = ActiveLearningNode::new(vec![7.0, 3.0]);
+        let promisse = node.calculate_promise();
+        assert!((promisse - 3.0).abs() < 1e-9);
+
+        let empty = ActiveLearningNode::new(vec![]);
+        assert_eq!(empty.calculate_promise(), 0.0);
+    }
+
+    #[test]
+    fn test_get_best_split_suggestions_collects_merits() {
+        let mut node = ActiveLearningNode::new(vec![1.0, 2.0]);
+        let tree =
+            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::MajorityClass);
+        let crit = MockSplitCriterion::new();
+
+        let suggestions = node.get_best_split_suggestions(&crit, &tree);
+        assert!(!suggestions.is_empty());
+        assert!(suggestions[0].get_merit() > 0.0);
+    }
+
+    #[test]
+    fn test_calc_byte_size_nonzero() {
+        let node = ActiveLearningNode::new(vec![1.0, 2.0, 3.0]);
+        assert!(node.calc_byte_size() > 0);
+    }
+
+    #[test]
+    fn test_filter_instance_to_leaf_returns_self_wrapped() {
+        let node = Rc::new(RefCell::new(ActiveLearningNode::new(vec![1.0])));
+        let instance = MockInstance::new(vec![1.0], 0, Some(0.0), 1.0);
+        let found = node.borrow().filter_instance_to_leaf(
+            node.clone() as Rc<RefCell<dyn Node>>,
+            &instance,
+            None,
+            0,
+        );
+
+        assert!(found.get_node().is_some());
+    }
+}
