@@ -61,7 +61,7 @@ impl Node for InactiveLearningNode {
     fn observed_class_distribution_is_pure(&self) -> bool {
         Self::num_non_zero_entries(&self.observed_class_distribution) < 2
     }
-    fn calc_byte_size(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         let mut total = size_of::<Self>();
 
         total += size_of::<Vec<f64>>();
@@ -70,8 +70,8 @@ impl Node for InactiveLearningNode {
         total
     }
 
-    fn calc_byte_size_including_subtree(&self) -> usize {
-        self.calc_byte_size()
+    fn calc_memory_size_including_subtree(&self) -> usize {
+        self.calc_memory_size()
     }
 }
 
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_calc_byte_size_non_zero() {
         let node = InactiveLearningNode::new(vec![1.0, 2.0, 3.0]);
-        let byte_size = node.calc_byte_size();
+        let byte_size = node.calc_memory_size();
         assert!(byte_size > 0);
     }
 

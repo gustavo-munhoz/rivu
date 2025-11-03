@@ -97,7 +97,7 @@ impl GaussianEstimator {
         0.0
     }
 
-    pub fn estimate_size_bytes(&self) -> usize {
+    pub fn calc_memory_size(&self) -> usize {
         size_of::<Self>()
     }
 }

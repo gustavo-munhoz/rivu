@@ -60,4 +60,28 @@ impl Attribute for NominalAttribute {
             nominal.values.join(", ")
         )
     }
+
+    fn calc_memory_size(&self) -> usize {
+        let mut total: usize = 0;
+
+        total += size_of::<Self>();
+
+        total += self.name.capacity();
+
+        total += size_of::<Vec<String>>();
+        total += self.values.capacity() * size_of::<String>();
+        total += self.values.iter().map(|s| s.capacity()).sum::<usize>();
+
+        let cap = self.label_to_index.capacity();
+
+        total += cap * size_of::<(String, usize)>();
+
+        total += self
+            .label_to_index
+            .keys()
+            .map(|k| k.capacity())
+            .sum::<usize>();
+
+        total
+    }
 }

@@ -171,6 +171,30 @@ impl Classifier for NaiveBayes {
             }
         }
     }
+
+    fn calc_memory_size(&self) -> usize {
+        let mut total: usize = 0;
+
+        total += size_of::<Option<Arc<InstanceHeader>>>();
+        if let Some(header) = &self.header {
+            total += header.calc_memory_size();
+        }
+
+        total += size_of::<Vec<f64>>();
+        total += self.observed_class_distribution.capacity() * size_of::<f64>();
+
+        total += size_of::<Vec<Option<Box<dyn AttributeClassObserver>>>>();
+        total += self.attribute_observers.capacity()
+            * size_of::<Option<Box<dyn AttributeClassObserver>>>();
+
+        for obs_opt in &self.attribute_observers {
+            if let Some(obs) = obs_opt.as_ref() {
+                total += obs.calc_memory_size();
+            }
+        }
+
+        total
+    }
 }
 
 #[cfg(test)]
@@ -279,6 +303,10 @@ mod tests {
         }
         fn arff_representation(&self) -> String {
             format!("@attribute {} numeric", self.name)
+        }
+
+        fn calc_memory_size(&self) -> usize {
+            unimplemented!()
         }
     }
 

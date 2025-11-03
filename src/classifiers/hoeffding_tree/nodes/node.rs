@@ -20,6 +20,6 @@ pub trait Node: Any {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn observed_class_distribution_is_pure(&self) -> bool;
-    fn calc_byte_size(&self) -> usize;
-    fn calc_byte_size_including_subtree(&self) -> usize;
+    fn calc_memory_size(&self) -> usize;
+    fn calc_memory_size_including_subtree(&self) -> usize;
 }

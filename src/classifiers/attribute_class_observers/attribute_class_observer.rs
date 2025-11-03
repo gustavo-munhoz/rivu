@@ -16,7 +16,7 @@ pub trait AttributeClassObserver {
         att_index: usize,
         binary_only: bool,
     ) -> Option<AttributeSplitSuggestion>;
-    fn estimate_size_bytes(&self) -> usize;
+    fn calc_memory_size(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }

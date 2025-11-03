@@ -174,7 +174,7 @@ impl AttributeClassObserver for GaussianNumericAttributeClassObserver {
         best
     }
 
-    fn estimate_size_bytes(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         let mut total = size_of::<Self>();
 
         total += self.min_value_observed_per_class.len() * size_of::<f64>();
@@ -184,7 +184,7 @@ impl AttributeClassObserver for GaussianNumericAttributeClassObserver {
 
         for est_opt in &self.attribute_value_distribution_per_class {
             if let Some(est) = est_opt {
-                total += est.estimate_size_bytes();
+                total += est.calc_memory_size();
             }
         }
 

@@ -53,4 +53,8 @@ impl Classifier for TrainSpyClassifier {
     fn train_on_instance(&mut self, _inst: &dyn Instance) {
         self.count.fetch_add(1, Ordering::Relaxed);
     }
+
+    fn calc_memory_size(&self) -> usize {
+        unimplemented!()
+    }
 }

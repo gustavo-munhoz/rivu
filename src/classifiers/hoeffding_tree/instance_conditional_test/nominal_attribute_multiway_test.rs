@@ -36,7 +36,7 @@ impl InstanceConditionalTest for NominalAttributeMultiwayTest {
         vec![self.attribute_index]
     }
 
-    fn calc_byte_size(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         size_of::<Self>()
     }
 
@@ -168,7 +168,7 @@ mod tests {
     fn test_calc_byte_size() {
         let test = NominalAttributeMultiwayTest::new(0);
         assert_eq!(
-            test.calc_byte_size(),
+            test.calc_memory_size(),
             std::mem::size_of::<NominalAttributeMultiwayTest>()
         );
     }
