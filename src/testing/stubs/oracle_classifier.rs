@@ -28,4 +28,8 @@ impl Classifier for OracleClassifier {
     }
 
     fn train_on_instance(&mut self, instance: &dyn Instance) {}
+
+    fn calc_memory_size(&self) -> usize {
+        size_of::<Self>()
+    }
 }

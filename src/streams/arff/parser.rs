@@ -361,6 +361,10 @@ mod tests {
         fn arff_representation(&self) -> String {
             "@attribute d dummy".into()
         }
+
+        fn calc_memory_size(&self) -> usize {
+            size_of::<Self>()
+        }
     }
 
     #[test]

@@ -126,7 +126,7 @@ impl Node for LearningNodeNB {
     fn observed_class_distribution_is_pure(&self) -> bool {
         Self::num_non_zero_entries(&self.observed_class_distribution) < 2
     }
-    fn calc_byte_size(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         let mut total = size_of::<Self>();
 
         total += size_of::<Vec<f64>>();
@@ -137,7 +137,7 @@ impl Node for LearningNodeNB {
             total += size_of::<Option<Box<dyn AttributeClassObserver>>>();
             if let Some(observer) = obs_opt {
                 total += size_of::<Box<dyn AttributeClassObserver>>();
-                total += observer.estimate_size_bytes();
+                total += observer.calc_memory_size();
             }
         }
 
@@ -147,8 +147,8 @@ impl Node for LearningNodeNB {
         total
     }
 
-    fn calc_byte_size_including_subtree(&self) -> usize {
-        self.calc_byte_size()
+    fn calc_memory_size_including_subtree(&self) -> usize {
+        self.calc_memory_size()
     }
 }
 
@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn test_calc_byte_size_non_zero() {
         let node = LearningNodeNB::new(vec![1.0, 2.0, 3.0]);
-        let size = node.calc_byte_size();
+        let size = node.calc_memory_size();
         assert!(size > 0);
     }
 

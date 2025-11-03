@@ -573,7 +573,7 @@ impl HoeffdingTree {
         for found in &learning_nodes {
             if let Some(node_rc) = found.get_node() {
                 let node = node_rc.borrow();
-                let size = node.calc_byte_size() as f64;
+                let size = node.calc_memory_size() as f64;
                 if node.as_any().is::<ActiveLearningNode>()
                     || node.as_any().is::<LearningNodeNB>()
                     || node.as_any().is::<LearningNodeNBAdaptive>()
@@ -599,7 +599,7 @@ impl HoeffdingTree {
             * self.active_leaf_byte_size_estimate)
             + (self.inactive_leaf_node_count as f64 * self.inactive_leaf_byte_size_estimate);
 
-        let actual_model_size = self.calc_byte_size();
+        let actual_model_size = self.calc_memory_size();
 
         if estimate_model_size > 0.0 {
             self.byte_size_estimate_overhead_fraction =
@@ -609,14 +609,6 @@ impl HoeffdingTree {
         if actual_model_size > self.max_byte_size_option {
             self.enforce_tracker_limit();
         }
-    }
-
-    pub fn calc_byte_size(&self) -> usize {
-        let mut size = size_of::<Self>();
-        if let Some(root) = &self.tree_root {
-            size += root.borrow().calc_byte_size_including_subtree();
-        }
-        size
     }
 
     fn extract_promise(found: &FoundNode) -> f64 {
@@ -785,6 +777,21 @@ impl Classifier for HoeffdingTree {
             self.estimate_model_byte_sizes();
         }
     }
+
+    fn calc_memory_size(&self) -> usize {
+        let mut size = size_of::<Self>();
+
+        if let Some(header) = &self.header {
+            size += header.calc_memory_size();
+        }
+
+        size += self.numeric_estimator.calc_memory_size();
+
+        if let Some(root) = &self.tree_root {
+            size += root.borrow().calc_memory_size_including_subtree();
+        }
+        size
+    }
 }
 
 #[cfg(test)]
@@ -891,7 +898,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn calc_byte_size(&self) -> usize {
+        fn calc_memory_size(&self) -> usize {
             unimplemented!()
         }
 
@@ -944,7 +951,7 @@ mod tests {
             vec![0]
         }
 
-        fn calc_byte_size(&self) -> usize {
+        fn calc_memory_size(&self) -> usize {
             8
         }
 
@@ -1366,10 +1373,12 @@ mod tests {
         let node = tree.new_learning_node();
         tree.tree_root = Some(node.clone());
 
-        let manual_size =
-            size_of::<HoeffdingTree>() + node.borrow().calc_byte_size_including_subtree();
+        let mut manual_size =
+            size_of::<HoeffdingTree>() + node.borrow().calc_memory_size_including_subtree();
 
-        let result = tree.calc_byte_size();
+        manual_size += tree.numeric_estimator.calc_memory_size();
+
+        let result = tree.calc_memory_size();
         assert_eq!(result, manual_size);
     }
 

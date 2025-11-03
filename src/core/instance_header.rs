@@ -64,6 +64,22 @@ impl InstanceHeader {
         }
         0
     }
+
+    pub fn calc_memory_size(&self) -> usize {
+        let mut total: usize = 0;
+
+        total += size_of::<Self>();
+
+        total += self.relation_name.capacity();
+
+        total += self.attributes.capacity() * size_of::<AttributeRef>();
+
+        for attr_arc in &self.attributes {
+            total += attr_arc.calc_memory_size();
+        }
+
+        total
+    }
 }
 
 impl fmt::Debug for InstanceHeader {

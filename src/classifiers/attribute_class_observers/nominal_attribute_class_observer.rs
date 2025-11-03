@@ -154,7 +154,7 @@ impl AttributeClassObserver for NominalAttributeClassObserver {
         best
     }
 
-    fn estimate_size_bytes(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         let mut total = size_of::<Self>();
 
         for inner in &self.attribute_value_distribution_per_class {

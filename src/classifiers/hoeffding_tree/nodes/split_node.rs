@@ -125,24 +125,24 @@ impl Node for SplitNode {
         Self::num_non_zero_entries(&self.observed_class_distribution) < 2
     }
 
-    fn calc_byte_size(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         let mut total = size_of::<Self>();
 
         total += size_of::<Vec<f64>>();
         total += self.observed_class_distribution.len() * size_of::<f64>();
         total += size_of::<Option<Rc<RefCell<dyn Node>>>>();
 
-        total += self.split_test.calc_byte_size();
+        total += self.split_test.calc_memory_size();
 
         total
     }
 
-    fn calc_byte_size_including_subtree(&self) -> usize {
-        let mut total = self.calc_byte_size();
+    fn calc_memory_size_including_subtree(&self) -> usize {
+        let mut total = self.calc_memory_size();
 
         for child in &self.children {
             if let Some(child_rc) = child {
-                total += child_rc.borrow().calc_byte_size_including_subtree();
+                total += child_rc.borrow().calc_memory_size_including_subtree();
             }
         }
 
@@ -182,7 +182,7 @@ mod tests {
             vec![0]
         }
 
-        fn calc_byte_size(&self) -> usize {
+        fn calc_memory_size(&self) -> usize {
             size_of::<Self>()
         }
 

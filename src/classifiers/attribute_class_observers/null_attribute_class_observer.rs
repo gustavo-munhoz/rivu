@@ -32,7 +32,7 @@ impl AttributeClassObserver for NullAttributeClassObserver {
         None
     }
 
-    fn estimate_size_bytes(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         size_of::<Self>()
     }
 

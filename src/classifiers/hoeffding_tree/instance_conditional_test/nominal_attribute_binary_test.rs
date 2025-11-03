@@ -49,7 +49,7 @@ impl InstanceConditionalTest for NominalAttributeBinaryTest {
         vec![self.attribute_index]
     }
 
-    fn calc_byte_size(&self) -> usize {
+    fn calc_memory_size(&self) -> usize {
         size_of::<Self>()
     }
 
@@ -208,7 +208,7 @@ mod tests {
     fn test_calc_byte_size() {
         let test = NominalAttributeBinaryTest::new(0, 1);
         assert_eq!(
-            test.calc_byte_size(),
+            test.calc_memory_size(),
             std::mem::size_of::<NominalAttributeBinaryTest>()
         );
     }
