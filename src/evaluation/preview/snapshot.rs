@@ -26,7 +26,7 @@ impl Display for Snapshot {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(
             f,
-            "seen={}, acc={}, kappa={}, ram_h={:.6}, t={:.3}s",
+            "seen={}, acc={}, kappa={}, ram_h={}, t={:.6}s",
             self.instances_seen,
             Self::fmtv(self.accuracy),
             Self::fmtv(self.kappa),

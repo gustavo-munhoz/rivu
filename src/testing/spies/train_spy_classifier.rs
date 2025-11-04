@@ -55,6 +55,6 @@ impl Classifier for TrainSpyClassifier {
     }
 
     fn calc_memory_size(&self) -> usize {
-        unimplemented!()
+        0
     }
 }

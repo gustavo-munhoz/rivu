@@ -2,11 +2,11 @@ use crate::classifiers::Classifier;
 use crate::core::instance_header::InstanceHeader;
 use crate::evaluation::{LearningCurve, PerformanceEvaluator, Snapshot};
 use crate::streams::Stream;
-use crate::utils::system::current_rss_gb;
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
-use std::time::Instant;
+
+use cpu_time::ThreadTime;
 
 pub struct PrequentialEvaluator {
     learner: Box<dyn Classifier>,
@@ -21,11 +21,12 @@ pub struct PrequentialEvaluator {
     mem_check_frequency: u64,
 
     processed: u64,
-    start_time: Instant,
-    last_sample_time: Instant,
-    last_mem_sample: Instant,
-    ram_hours: f64,
 
+    start_cpu: ThreadTime,
+    last_cpu_sample: ThreadTime,
+    last_cpu_mem: ThreadTime,
+
+    ram_hours: f64,
     progress_tx: Option<Sender<Snapshot>>,
 }
 
@@ -60,6 +61,7 @@ impl PrequentialEvaluator {
         ));
         learner.set_model_context(Arc::clone(&header_arc));
 
+        let now = ThreadTime::now();
         Ok(Self {
             learner,
             stream,
@@ -70,25 +72,23 @@ impl PrequentialEvaluator {
             sample_frequency,
             mem_check_frequency,
             processed: 0,
-            start_time: Instant::now(),
-            last_sample_time: Instant::now(),
-            last_mem_sample: Instant::now(),
+            start_cpu: now,
+            last_cpu_sample: now,
+            last_cpu_mem: now,
             ram_hours: 0.0,
             progress_tx: None,
         })
     }
-}
 
-impl PrequentialEvaluator {
     pub fn with_progress(mut self, tx: Sender<Snapshot>) -> Self {
         self.progress_tx = Some(tx);
         self
     }
 
     pub fn run(&mut self) -> Result<(), Error> {
-        self.start_time = Instant::now();
-        self.last_sample_time = self.start_time;
-        self.last_mem_sample = self.start_time;
+        self.start_cpu = ThreadTime::now();
+        self.last_cpu_sample = self.start_cpu;
+        self.last_cpu_mem = self.start_cpu;
 
         while self.stream.has_more_instances() {
             if let Some(n) = self.max_instances {
@@ -97,35 +97,30 @@ impl PrequentialEvaluator {
                 }
             }
             if let Some(s) = self.max_seconds {
-                if self.start_time.elapsed().as_secs() >= s {
+                if self.start_cpu.elapsed().as_secs() >= s {
                     break;
                 }
             }
+
             let Some(instance) = self.stream.next_instance() else {
                 break;
             };
             self.processed += 1;
 
-            // TODO: Remove this
-            if self.processed == 581012 {
-                println!("last element");
-            }
-
             let votes = self.learner.get_votes_for_instance(&*instance);
-
             self.evaluator.add_result(&*instance, votes);
-
             self.learner.train_on_instance(instance.as_ref());
 
             if self.processed % self.mem_check_frequency == 0 {
-                self.bump_ram_hours();
+                self.bump_ram_hours_cpu();
             }
             if self.processed % self.sample_frequency == 0 {
-                self.push_snapshot();
+                self.push_snapshot_cpu();
             }
         }
 
-        self.push_snapshot();
+        self.bump_ram_hours_cpu();
+        self.push_snapshot_cpu();
         Ok(())
     }
 
@@ -133,10 +128,10 @@ impl PrequentialEvaluator {
         &self.curve
     }
 
-    fn push_snapshot(&mut self) {
+    fn push_snapshot_cpu(&mut self) {
         use std::collections::BTreeMap;
 
-        let secs = self.start_time.elapsed().as_secs_f64();
+        let secs = self.start_cpu.elapsed().as_secs_f64(); // CPU seconds
         let perf = self.evaluator.performance();
 
         let mut acc = f64::NAN;
@@ -144,12 +139,11 @@ impl PrequentialEvaluator {
         let mut extras = BTreeMap::new();
 
         for m in perf {
-            let key: &str = m.name.as_ref();
-            match key {
+            match m.name.as_ref() {
                 "accuracy" => acc = m.value,
                 "kappa" => kap = m.value,
-                _ => {
-                    extras.insert(key.to_string(), m.value);
+                other => {
+                    extras.insert(other.to_string(), m.value);
                 }
             }
         }
@@ -168,17 +162,17 @@ impl PrequentialEvaluator {
         }
 
         self.curve.push(snapshot);
-        self.last_sample_time = Instant::now();
+        self.last_cpu_sample = ThreadTime::now();
     }
 
-    fn bump_ram_hours(&mut self) {
-        let now = Instant::now();
-        let duration = now - self.last_mem_sample;
-        let dt_h = duration.as_secs_f64() / 3600.0;
-        self.last_mem_sample = now;
+    fn bump_ram_hours_cpu(&mut self) {
+        let dt = self.last_cpu_mem.elapsed();
+        self.last_cpu_mem = ThreadTime::now();
 
-        let rss_gb = current_rss_gb().unwrap_or(0.0);
-        self.ram_hours += rss_gb * dt_h;
+        let dt_h = dt.as_secs_f64() / 3600.0;
+
+        let model_gb = (self.learner.calc_memory_size() as f64) / (1024.0 * 1024.0 * 1024.0);
+        self.ram_hours += model_gb * dt_h;
     }
 }
 
@@ -196,6 +190,7 @@ mod tests {
         let l: Box<dyn Classifier> = Box::new(OracleClassifier::default());
         let e: Box<dyn PerformanceEvaluator> =
             Box::new(BasicClassificationEvaluator::<BasicEstimator>::new_with_default_flags(2));
+
         let err = PrequentialEvaluator::new(l, s, e, None, None, 0, 5)
             .err()
             .unwrap();
@@ -256,6 +251,7 @@ mod tests {
         let e: Box<dyn PerformanceEvaluator> =
             Box::new(BasicClassificationEvaluator::<BasicEstimator>::new_with_default_flags(2));
 
+        // Uses CPU time: 0 seconds triggers immediate stop
         let mut pq = PrequentialEvaluator::new(l, s, e, None, Some(0), 10, 10).unwrap();
         pq.run().unwrap();
 
@@ -285,7 +281,7 @@ mod tests {
     fn votes_none_keeps_metrics_nan_and_zero() {
         let s: Box<dyn Stream> =
             Box::new(VecStream::new((0..20).map(|i| (i % 2) as usize).collect()));
-        let l: Box<dyn Classifier> = Box::new(ClassifierNoneVotes::default());
+        let l: Box<dyn Classifier> = Box::new(crate::testing::ClassifierNoneVotes::default());
         let e: Box<dyn PerformanceEvaluator> =
             Box::new(BasicClassificationEvaluator::<BasicEstimator>::new_with_default_flags(2));
 
@@ -300,9 +296,9 @@ mod tests {
     #[test]
     fn train_called_once_per_instance() {
         let labels: Vec<usize> = (0..37).map(|i| (i % 2) as usize).collect();
-        let s: Box<dyn Stream> = Box::new(VecStream::new(labels));
+        let s: Box<dyn Stream> = Box::new(crate::testing::VecStream::new(labels));
 
-        let (spy_cls, handle) = TrainSpyClassifier::new();
+        let (spy_cls, handle) = crate::testing::TrainSpyClassifier::new();
         let l: Box<dyn Classifier> = Box::new(spy_cls);
 
         let e: Box<dyn PerformanceEvaluator> =
