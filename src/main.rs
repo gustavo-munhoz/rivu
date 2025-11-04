@@ -140,7 +140,7 @@ pub fn render_status_with_header(
 
 fn format_status(
     s: &Snapshot,
-    prev: Option<&Snapshot>,
+    _: Option<&Snapshot>,
     max_instances: Option<u64>,
     max_seconds: Option<u64>,
 ) -> String {
@@ -148,22 +148,10 @@ fn format_status(
     let acc = fmtf(s.accuracy, 6);
     let kappa = fmtf(s.kappa, 6);
 
-    let (mut kappa_t, mut kappa_m, mut prec, mut rec, mut f1) = (
-        String::new(),
-        String::new(),
-        String::new(),
-        String::new(),
-        String::new(),
-    );
+    let (mut prec, mut rec, mut f1) = (String::new(), String::new(), String::new());
 
     #[allow(unused_variables)]
     if let Some(extras) = snapshot_extras(s) {
-        if let Some(v) = extras.get("kappa_t") {
-            kappa_t = format!("  {DIM}κₜ{RESET} {}", fmtf(*v, 6));
-        }
-        if let Some(v) = extras.get("kappa_m") {
-            kappa_m = format!("  {DIM}κₘ{RESET} {}", fmtf(*v, 6));
-        }
         if let Some(v) = extras.get("precision") {
             prec = format!("  {DIM}P{RESET} {}", fmtf(*v, 6));
         }
@@ -175,18 +163,7 @@ fn format_status(
         }
     }
 
-    let ips = prev.and_then(|p| {
-        let ds = (s.instances_seen as i64 - p.instances_seen as i64) as f64;
-        let dt = (s.seconds - p.seconds).max(0.0);
-        if dt > 0.0 { Some(ds / dt) } else { None }
-    });
-    let ips_str = if let Some(x) = ips {
-        fmt_int(x)
-    } else {
-        "—".into()
-    };
-
-    let bar_w = 20usize;
+    let bar_w = 15usize;
     let inst_bar = progress_bar(seen as f64, max_instances.map(|m| m as f64), bar_w);
     let time_bar = progress_bar(s.seconds, max_seconds.map(|m| m as f64), bar_w);
 
@@ -194,25 +171,12 @@ fn format_status(
         "{FG_GREEN}{BOLD}seen{RESET} {:>9}  \
          {FG_CYAN}{BOLD}acc{RESET} {:>7}  \
          {FG_MAGENTA}{BOLD}κ{RESET} {:>7} \
-         {}{}{}{}{}  \
-         {FG_BLUE}{BOLD}ips{RESET} {:>8}  \
-         {DIM}ram_h{RESET} {:>8.3}  \
+         {}{}{}  \
+         {DIM}ram_h{RESET} {:>8.9e}  \
          {DIM}t{RESET} {:>7.2}s  \
          {DIM}[inst]{RESET} {}  \
          {DIM}[time]{RESET} {}",
-        seen,
-        acc,
-        kappa,
-        kappa_t,
-        kappa_m,
-        prec,
-        rec,
-        f1,
-        ips_str,
-        s.ram_hours,
-        s.seconds,
-        inst_bar,
-        time_bar
+        seen, acc, kappa, prec, rec, f1, s.ram_hours, s.seconds, inst_bar, time_bar
     )
 }
 
@@ -242,13 +206,6 @@ fn fmtf(x: f64, prec: usize) -> String {
         format!("{DIM}NaN{RESET}")
     } else {
         format!("{:>1$.prec$}", x, 6, prec = prec)
-    }
-}
-fn fmt_int(x: f64) -> String {
-    if x.is_nan() || !x.is_finite() {
-        "NaN".into()
-    } else {
-        format!("{:.0}", x)
     }
 }
 fn timestamp_now() -> String {
