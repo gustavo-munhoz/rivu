@@ -47,10 +47,19 @@ impl LearningNodeNBAdaptive {
     }
 
     fn max_index(dist: &[f64]) -> Option<usize> {
-        dist.iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i)
+        if dist.is_empty() {
+            return None;
+        }
+
+        let mut max_i = 0usize;
+        let mut max_v = dist[0];
+        for (i, &v) in dist.iter().enumerate().skip(1) {
+            if v > max_v {
+                max_v = v;
+                max_i = i;
+            }
+        }
+        Some(max_i)
     }
 
     fn super_learn_from_instance(

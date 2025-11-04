@@ -327,9 +327,9 @@ impl HoeffdingTree {
             if a_merit.is_nan() && b_merit.is_nan() {
                 Ordering::Equal
             } else if a_merit.is_nan() {
-                Ordering::Less
-            } else if b_merit.is_nan() {
                 Ordering::Greater
+            } else if b_merit.is_nan() {
+                Ordering::Less
             } else {
                 a_merit.partial_cmp(&b_merit).unwrap_or(Ordering::Equal)
             }
@@ -649,9 +649,6 @@ impl Classifier for HoeffdingTree {
     }
 
     fn train_on_instance(&mut self, instance: &dyn Instance) {
-        if self.training_weight_seen_by_model == 6528.0 {
-            println!("Second Split")
-        }
         if self.tree_root.is_none() {
             self.tree_root = Some(self.new_learning_node());
             self.active_leaf_node_count = 1;
