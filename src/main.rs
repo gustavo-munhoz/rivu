@@ -140,17 +140,15 @@ pub fn render_status_with_header(
 
 fn format_status(
     s: &Snapshot,
-    _: Option<&Snapshot>,
+    _prev: Option<&Snapshot>,
     max_instances: Option<u64>,
     max_seconds: Option<u64>,
 ) -> String {
     let seen = s.instances_seen;
-    let acc = fmtf(s.accuracy, 6);
-    let kappa = fmtf(s.kappa, 6);
+    let acc = fmtf(s.accuracy, 12);
+    let kappa = fmtf(s.kappa, 12);
 
     let (mut prec, mut rec, mut f1) = (String::new(), String::new(), String::new());
-
-    #[allow(unused_variables)]
     if let Some(extras) = snapshot_extras(s) {
         if let Some(v) = extras.get("precision") {
             prec = format!("  {DIM}P{RESET} {}", fmtf(*v, 6));
@@ -163,42 +161,47 @@ fn format_status(
         }
     }
 
-    let bar_w = 15usize;
-    let inst_bar = progress_bar(seen as f64, max_instances.map(|m| m as f64), bar_w);
-    let time_bar = progress_bar(s.seconds, max_seconds.map(|m| m as f64), bar_w);
-
-    format!(
+    let mut line = format!(
         "{FG_GREEN}{BOLD}seen{RESET} {:>9}  \
          {FG_CYAN}{BOLD}acc{RESET} {:>7}  \
          {FG_MAGENTA}{BOLD}κ{RESET} {:>7} \
          {}{}{}  \
-         {DIM}ram_h{RESET} {:>8.9e}  \
-         {DIM}t{RESET} {:>7.2}s  \
-         {DIM}[inst]{RESET} {}  \
-         {DIM}[time]{RESET} {}",
-        seen, acc, kappa, prec, rec, f1, s.ram_hours, s.seconds, inst_bar, time_bar
-    )
+         {DIM}ram_h{RESET} {:>8.16e}  \
+         {DIM}t{RESET} {:>7.6}s",
+        seen, acc, kappa, prec, rec, f1, s.ram_hours, s.seconds
+    );
+
+    let bar_w = 15usize;
+    if let Some(mi) = max_instances {
+        let inst_bar = progress_bar(seen as f64, mi as f64, bar_w);
+        line.push_str(&format!("  {DIM}[inst]{RESET} {}", inst_bar));
+    }
+    if let Some(ms) = max_seconds {
+        let time_bar = progress_bar(s.seconds, ms as f64, bar_w);
+        line.push_str(&format!("  {DIM}[time]{RESET} {}", time_bar));
+    }
+
+    line
 }
 
 fn snapshot_extras(s: &Snapshot) -> Option<&std::collections::BTreeMap<String, f64>> {
     Some(&s.extras)
 }
 
-fn progress_bar(current: f64, total: Option<f64>, width: usize) -> String {
-    match total {
-        Some(t) if t.is_finite() && t > 0.0 => {
-            let ratio = (current / t).clamp(0.0, 1.0);
-            let filled = (ratio * width as f64).round() as usize;
-            let empty = width.saturating_sub(filled);
-            format!(
-                "[{}{}] {:>3.0}%",
-                "█".repeat(filled),
-                "░".repeat(empty),
-                ratio * 100.0
-            )
-        }
-        _ => format!("[{}]   —%", "░".repeat(width)),
+fn progress_bar(current: f64, total: f64, width: usize) -> String {
+    if total.is_finite() && total > 0.0 {
+        let ratio = (current / total).clamp(0.0, 1.0);
+        let filled = (ratio * width as f64).round() as usize;
+        let empty = width.saturating_sub(filled);
+        return format!(
+            "[{}{}] {:>3.0}%",
+            "█".repeat(filled),
+            "░".repeat(empty),
+            ratio * 100.0
+        );
     }
+
+    String::new()
 }
 
 fn fmtf(x: f64, prec: usize) -> String {

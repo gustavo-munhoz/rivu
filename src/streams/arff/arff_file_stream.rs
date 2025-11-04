@@ -60,7 +60,7 @@ impl Stream for ArffFileStream {
 }
 
 impl ArffFileStream {
-    pub fn new(path: PathBuf, class_index: usize) -> Result<Self, Error> {
+    pub fn new(path: PathBuf, class_index: Option<usize>) -> Result<Self, Error> {
         let file = File::open(&path)?;
         let mut reader = BufReader::new(file);
 
@@ -132,7 +132,7 @@ rainy,70,96,FALSE,yes
 ?,75,?,TRUE,yes
 "#;
         let tf = write_arff(arff);
-        let mut stream = ArffFileStream::new(tf.path().to_path_buf(), 4).expect("open");
+        let mut stream = ArffFileStream::new(tf.path().to_path_buf(), Some(4)).expect("open");
         let h = stream.header();
         assert_eq!(h.relation_name(), "weather");
         assert_eq!(h.number_of_attributes(), 5);
@@ -157,49 +157,49 @@ rainy,70,96,FALSE,yes
 
     #[test]
     fn new_missing_file_returns_err_not_found() {
-        let err = ArffFileStream::new("no/such/file.arff".into(), 0).unwrap_err();
+        let err = ArffFileStream::new("no/such/file.arff".into(), Some(0)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::NotFound);
     }
 
     #[test]
     fn header_without_data_errors_unexpected_eof() {
         let tf = write_arff("@relation r\n@attribute a numeric\n");
-        let err = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap_err();
+        let err = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnexpectedEof);
     }
 
     #[test]
     fn unsupported_header_directive_errors() {
         let tf = write_arff("@relation r\n@foo bar\n@data\n1\n");
-        let err = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap_err();
+        let err = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidData);
     }
 
     #[test]
     fn nominal_domain_without_closing_brace_errors() {
         let tf = write_arff("@relation r\n@attribute outlook {sunny, rainy\n@data\nsunny\n");
-        let err = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap_err();
+        let err = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidData);
     }
 
     #[test]
     fn data_row_with_wrong_arity_returns_none() {
         let tf = write_arff("@relation r\n@attribute a numeric\n@attribute b numeric\n@data\n1\n");
-        let mut stream = ArffFileStream::new(tf.path().to_path_buf(), 1).unwrap();
+        let mut stream = ArffFileStream::new(tf.path().to_path_buf(), Some(1)).unwrap();
         assert!(stream.next_instance().is_none());
     }
 
     #[test]
     fn invalid_numeric_value_returns_none() {
         let tf = write_arff("@relation r\n@attribute x numeric\n@data\nabc\n");
-        let mut stream = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap();
+        let mut stream = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap();
         assert!(stream.next_instance().is_none());
     }
 
     #[test]
     fn fill_next_line_when_finished_is_noop() {
         let tf = write_arff("@relation r\n@attribute a numeric\n@data\n1\n");
-        let mut s = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap();
+        let mut s = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap();
         s.finished = true;
         s.next_line = Some("x".into());
         s.fill_next_line().unwrap();
@@ -210,10 +210,10 @@ rainy,70,96,FALSE,yes
     #[test]
     fn next_instance_sets_finished_on_io_error() {
         let tf = write_arff("@relation r\n@attribute a numeric\n@data\n1\n2\n");
-        let mut s = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap();
+        let mut s = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap();
         let _ = s.next_instance().unwrap();
         let dir = tempdir().unwrap();
-        s.reader = std::io::BufReader::new(std::fs::File::open(dir.path()).unwrap());
+        s.reader = BufReader::new(File::open(dir.path()).unwrap());
         let _ = s.next_instance();
         assert!(s.finished);
     }
@@ -221,7 +221,7 @@ rainy,70,96,FALSE,yes
     #[test]
     fn parse_header_attribute_before_relation_is_seen() {
         let tf = write_arff("@attribute a numeric\n@data\n1\n");
-        let s = ArffFileStream::new(tf.path().to_path_buf(), 0).unwrap();
+        let s = ArffFileStream::new(tf.path().to_path_buf(), Some(0)).unwrap();
         assert_eq!(s.header().number_of_attributes(), 1);
         assert_eq!(s.header().relation_name(), "unnamed_relation");
     }
@@ -231,8 +231,8 @@ rainy,70,96,FALSE,yes
     fn restart_after_file_removed_returns_err() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("data.arff");
-        std::fs::write(&path, "@relation r\n@attribute x numeric\n@data\n1\n").unwrap();
-        let mut stream = ArffFileStream::new(path.clone(), 0).unwrap();
+        fs::write(&path, "@relation r\n@attribute x numeric\n@data\n1\n").unwrap();
+        let mut stream = ArffFileStream::new(path.clone(), Some(0)).unwrap();
         fs::remove_file(&path).unwrap();
         let err = stream.restart().unwrap_err();
         assert_eq!(err.kind(), ErrorKind::NotFound);
