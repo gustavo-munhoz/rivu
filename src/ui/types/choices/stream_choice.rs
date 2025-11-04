@@ -35,10 +35,10 @@ pub struct ArffParameters {
 
     #[schemars(
         title = "Class Index",
-        description = "Zero-based index of the class column",
-        range(min = 0)
+        description = "Index of the class column. (None = last attribute in file)",
+        range(min = 1)
     )]
-    pub class_index: usize,
+    pub class_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -223,7 +223,7 @@ mod tests {
     fn serde_roundtrip_arff() {
         let p0 = ArffParameters {
             path: PathBuf::from("data/a.arff"),
-            class_index: 1,
+            class_index: Some(1),
         };
         let j = serde_json::to_string(&p0).unwrap();
         let p1: ArffParameters = serde_json::from_str(&j).unwrap();
@@ -341,7 +341,7 @@ mod tests {
         assert!(exts.iter().any(|v| v.as_str() == Some("arff")));
 
         let cls = obj.get("class_index").unwrap().as_object().unwrap();
-        assert_eq!(cls.get("minimum").and_then(Value::as_u64), Some(0));
+        assert_eq!(cls.get("minimum").and_then(Value::as_u64), Some(1));
     }
 
     #[test]

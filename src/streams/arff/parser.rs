@@ -19,7 +19,7 @@ pub(super) fn is_comment_or_empty(s: &str) -> bool {
 
 pub(super) fn parse_header(
     reader: &mut BufReader<File>,
-    class_index: usize,
+    class_index: Option<usize>,
 ) -> Result<(InstanceHeader, u64), Error> {
     let mut relation: Option<String> = None;
     let mut attributes: Vec<AttributeRef> = Vec::new();
@@ -98,10 +98,32 @@ pub(super) fn parse_header(
         }
     }
 
+    let attributes_len = attributes.len();
+    if attributes_len == 0 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "no attributes in ARFF header",
+        ));
+    }
+
+    let index = match class_index {
+        Some(idx) if idx < attributes_len => idx,
+        Some(idx) => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "class_index {} out of bounds (attributes = {})",
+                    idx, attributes_len
+                ),
+            ));
+        }
+        None => attributes_len - 1,
+    };
+
     let header = InstanceHeader::new(
         relation.unwrap_or_else(|| "unnamed_relation".to_string()),
         attributes,
-        class_index,
+        index,
     );
 
     Ok((header, data_start_pos))
@@ -378,7 +400,7 @@ mod tests {
     fn parse_header_unexpected_eof_before_data() {
         let tf = write_temp("@relation r\n@attribute a numeric\n");
         let mut br = BufReader::new(File::open(tf.path()).unwrap());
-        let err = parse_header(&mut br, 0).unwrap_err();
+        let err = parse_header(&mut br, Some(0)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnexpectedEof);
     }
 
@@ -386,7 +408,7 @@ mod tests {
     fn parse_header_unsupported_header_directive() {
         let tf = write_temp("@relation r\n@foo bar\n@data\n1\n");
         let mut br = BufReader::new(File::open(tf.path()).unwrap());
-        let err = parse_header(&mut br, 0).unwrap_err();
+        let err = parse_header(&mut br, None).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidData);
     }
 
@@ -394,7 +416,7 @@ mod tests {
     fn parse_header_attribute_before_relation_is_reprocessed() {
         let tf = write_temp("@attribute a numeric\n@data\n1\n");
         let mut br = BufReader::new(File::open(tf.path()).unwrap());
-        let (h, _pos) = parse_header(&mut br, 0).unwrap();
+        let (h, _pos) = parse_header(&mut br, Some(0)).unwrap();
         assert_eq!(h.relation_name(), "unnamed_relation");
         assert_eq!(h.number_of_attributes(), 1);
     }
