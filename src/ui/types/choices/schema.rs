@@ -115,9 +115,11 @@ pub fn specs_for_kind(root: &Schema, kind_key: &str) -> Result<Vec<FieldSpec>> {
                 .or_else(|| fs_obj.get("exclusiveMaximum"))
                 .and_then(|v| v.as_f64());
 
-            let allowed_local = fs_obj.get("enum")
-                .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>());
+            let allowed_local = fs_obj.get("enum").and_then(|v| v.as_array()).map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<_>>()
+            });
 
             let allowed = allowed_local.or(None);
 

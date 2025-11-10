@@ -13,7 +13,7 @@ use crate::classifiers::hoeffding_tree::split_criteria::GiniSplitCriterion;
 use crate::classifiers::hoeffding_tree::split_criteria::SplitCriterion;
 use crate::core::instance_header::InstanceHeader;
 use crate::core::instances::Instance;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::rc::Rc;

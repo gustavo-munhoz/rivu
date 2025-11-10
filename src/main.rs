@@ -84,15 +84,14 @@ fn main() -> Result<()> {
     runner.run().context("runner failed")?;
 
     if let Some(path) = dump_path {
-        runner.curve()
+        runner
+            .curve()
             .export(&path, CurveFormat::from(dump_format))
             .with_context(|| format!("failed to export snapshots to {}", path.display()))?;
     }
 
     drop(runner);
     let _ = render.join();
-
-
 
     Ok(())
 }

@@ -80,7 +80,7 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
                     .map(|x| x.to_string()),
                 _ => None,
             }
-                .unwrap_or_default();
+            .unwrap_or_default();
 
             let answer = driver.ask_string(
                 &s.title,
@@ -161,7 +161,7 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
                         } else {
                             Some(Value::String(selected))
                         }
-                            .unwrap_or_else(|| Value::Null) // keep a consistent type (optional)
+                        .unwrap_or_else(|| Value::Null) // keep a consistent type (optional)
                     } else {
                         // Free-text string. Special-case ARFF path validation.
                         let def = init
@@ -180,8 +180,8 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
                                 &s.title,
                                 more_help,
                                 &def,
-                                true,   // must_exist
-                                true,   // must_be_file
+                                true, // must_exist
+                                true, // must_be_file
                                 &["arff"],
                             )?;
                             pb.to_string_lossy().into_owned()

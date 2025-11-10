@@ -1,17 +1,25 @@
-use std::path::PathBuf;
+use crate::evaluation::CurveFormat;
 use crate::ui::cli::wizard::prompt_choice;
 use crate::ui::types::choices::{EvaluatorChoice, LearnerChoice, StreamChoice, UIChoice};
-use crate::evaluation::CurveFormat;
 use schemars::{JsonSchema, Schema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
+use std::path::PathBuf;
 use strum_macros::{Display, EnumDiscriminants, EnumIter, EnumMessage, EnumString, IntoStaticStr};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
-pub enum DumpFormat { Csv, Tsv, Json }
+pub enum DumpFormat {
+    Csv,
+    Tsv,
+    Json,
+}
 
-impl Default for DumpFormat { fn default() -> Self { DumpFormat::Csv } }
+impl Default for DumpFormat {
+    fn default() -> Self {
+        DumpFormat::Csv
+    }
+}
 
 impl From<DumpFormat> for CurveFormat {
     fn from(value: DumpFormat) -> Self {
@@ -70,10 +78,7 @@ pub struct PrequentialParams {
     pub dump_file: Option<PathBuf>,
 
     #[serde(default)]
-    #[schemars(
-        title = "Dump format",
-        description = "csv / tsv / json (default: csv)",
-    )]
+    #[schemars(title = "Dump format", description = "csv / tsv / json (default: csv)")]
     pub dump_format: DumpFormat,
 }
 
@@ -247,7 +252,7 @@ mod tests {
             sample_frequency: 1000,
             mem_check_frequency: 1000,
             dump_file: None,
-            dump_format: DumpFormat::Csv
+            dump_format: DumpFormat::Csv,
         };
 
         let v = serde_json::to_value(TaskChoice::EvaluatePrequential(p)).unwrap();
