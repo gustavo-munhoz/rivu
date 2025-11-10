@@ -1,15 +1,16 @@
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
-use rivu::evaluation::Snapshot;
+use rivu::evaluation::{CurveFormat, Snapshot};
 use rivu::tasks::PrequentialEvaluator;
 use rivu::ui::cli::{drivers::InquireDriver, wizard::prompt_choice};
 use rivu::ui::types::build::{build_evaluator, build_learner, build_stream};
-use rivu::ui::types::choices::TaskChoice;
+use rivu::ui::types::choices::{DumpFormat, TaskChoice};
 
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
@@ -28,6 +29,8 @@ fn main() -> Result<()> {
 
     let render: JoinHandle<()>;
 
+    let dump_path: Option<PathBuf>;
+    let dump_format: DumpFormat;
     let mut runner = match task {
         TaskChoice::EvaluatePrequential(p) => {
             let stream_choice = p.stream;
@@ -37,6 +40,8 @@ fn main() -> Result<()> {
             let max_seconds = p.max_seconds;
             let sample_freq = p.sample_frequency;
             let mem_check_freq = p.mem_check_frequency;
+            dump_path = p.dump_file;
+            dump_format = p.dump_format;
 
             let header: Vec<String> = vec![
                 format!("{BOLD}{FG_CYAN}▶ Prequential Evaluation{RESET}"),
@@ -78,10 +83,15 @@ fn main() -> Result<()> {
 
     runner.run().context("runner failed")?;
 
+    if let Some(path) = dump_path {
+        runner
+            .curve()
+            .export(&path, CurveFormat::from(dump_format))
+            .with_context(|| format!("failed to export snapshots to {}", path.display()))?;
+    }
+
     drop(runner);
     let _ = render.join();
-
-    // TODO: Implement file dumping
 
     Ok(())
 }

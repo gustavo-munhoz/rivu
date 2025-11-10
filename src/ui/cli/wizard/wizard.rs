@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use inquire::Select;
 use serde_json::{Map, Value};
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
@@ -40,33 +41,34 @@ where
 }
 
 pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
+    // 1) Choose variant/kind
     let items = kind_items::<C::Kind>();
-
     let mut select = inquire::Select::new(C::prompt_label(), items);
-
     if let Some(help) = C::prompt_help() {
         select = select.with_help_message(help);
     }
-
     let selected = select.prompt()?;
     let choice_kind: C::Kind = selected.kind;
 
+    // 2) Load schema + field specs for chosen branch
     let key: &'static str = choice_kind.into();
     let schema = schema_for::<C>();
     let specs = specs_for_kind(&schema, key)?;
-
     let defaults = C::default_params(choice_kind);
 
+    // 3) Prompt each field
     let mut params = Map::new();
     for s in specs {
         let init = s.default.clone().or_else(|| defaults.get(&s.name).cloned());
         let help = s.description.as_deref().unwrap_or("");
 
+        // numeric Option<T> with "leave blank for none"
         let is_optional_numeric = !s.required
             && matches!(s.kind, FieldKind::Integer | FieldKind::Number)
             && matches!(init, None | Some(Value::Null));
 
         let val_opt: Option<Value> = if is_optional_numeric {
+            // show prefilled text, blank -> None
             let def_txt = match s.kind {
                 FieldKind::Integer => init
                     .as_ref()
@@ -107,39 +109,89 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
                 })
             }
         } else {
+            // all other cases
             Some(match s.kind {
                 FieldKind::Boolean => {
                     let def = init.and_then(|v| v.as_bool()).unwrap_or(false);
                     Value::Bool(driver.ask_bool(&s.title, help, def)?)
                 }
+
                 FieldKind::String => {
-                    let def = init
-                        .and_then(|v| v.as_str().map(|s| s.to_string()))
-                        .unwrap_or_default();
-                    let is_arff_path = s.name == "path";
+                    // If schema has an enum, show a Select
+                    if let Some(opts) = &s.allowed {
+                        // build the menu (clone allowed values)
+                        let mut menu = opts.clone();
 
-                    let answered = if is_arff_path {
-                        let more_help = if help.is_empty() {
-                            "Please type a valid .arff file path"
+                        // add a "none" entry for optional string-enums
+                        let mut none_idx: Option<usize> = None;
+                        if !s.required {
+                            none_idx = Some(menu.len());
+                            menu.push("— none —".to_string());
+                        }
+
+                        // compute starting index from default/init
+                        let def_str = init.as_ref().and_then(|v| v.as_str());
+                        let mut start_idx = def_str
+                            .and_then(|cur| menu.iter().position(|o| o == cur))
+                            .unwrap_or(0);
+
+                        // if default is None/null and we added "none", start there
+                        if def_str.is_none() {
+                            if let Some(idx) = none_idx {
+                                start_idx = idx;
+                            }
+                        }
+
+                        let selected = Select::new(&s.title, menu.clone())
+                            .with_help_message(help)
+                            .with_starting_cursor(start_idx.min(menu.len().saturating_sub(1)))
+                            .prompt()?;
+
+                        if let Some(idx) = none_idx {
+                            if selected == "— none —" && start_idx == idx {
+                                // treat "none" as absence; skip insert by returning None
+                                // (the outer `if let Some(val)` will just not insert)
+                                // If you prefer explicit null, return Some(Value::Null) here.
+                                None
+                            } else if selected == "— none —" {
+                                None
+                            } else {
+                                Some(Value::String(selected))
+                            }
                         } else {
-                            help
-                        };
-                        let pb = prompt_path_until_ok(
-                            driver,
-                            &s.title,
-                            more_help,
-                            &def,
-                            true,
-                            true,
-                            &["arff"],
-                        )?;
-                        pb.to_string_lossy().into_owned()
+                            Some(Value::String(selected))
+                        }
+                        .unwrap_or_else(|| Value::Null) // keep a consistent type (optional)
                     } else {
-                        driver.ask_string(&s.title, help, &def)?
-                    };
+                        // Free-text string. Special-case ARFF path validation.
+                        let def = init
+                            .and_then(|v| v.as_str().map(|s| s.to_string()))
+                            .unwrap_or_default();
 
-                    Value::String(answered)
+                        let is_arff_path = s.name == "path";
+                        let answered = if is_arff_path {
+                            let more_help = if help.is_empty() {
+                                "Please type a valid .arff file path"
+                            } else {
+                                help
+                            };
+                            let pb = prompt_path_until_ok(
+                                driver,
+                                &s.title,
+                                more_help,
+                                &def,
+                                true, // must_exist
+                                true, // must_be_file
+                                &["arff"],
+                            )?;
+                            pb.to_string_lossy().into_owned()
+                        } else {
+                            driver.ask_string(&s.title, help, &def)?
+                        };
+                        Value::String(answered)
+                    }
                 }
+
                 FieldKind::Integer => {
                     let def = init.and_then(|v| v.as_u64()).unwrap_or(0);
                     Value::from(driver.ask_u64(
@@ -150,6 +202,7 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
                         s.max.map(|x| x as u64),
                     )?)
                 }
+
                 FieldKind::Number => {
                     let def = init.and_then(|v| v.as_f64()).unwrap_or(0.0);
                     Value::from(driver.ask_f64(&s.title, help, def, s.min, s.max)?)
@@ -158,13 +211,18 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
         };
 
         if let Some(val) = val_opt {
+            // Skip inserting explicit nulls if you want "unset" instead
+            // if val.is_null() { /* skip */ } else { params.insert(...) }
             params.insert(s.name.clone(), val);
         }
     }
 
+    // 4) Nested subprompts (e.g., learner/stream/evaluator)
     if let Some(extra) = C::subprompts(driver, choice_kind)? {
         params.extend(extra);
     }
+
+    // 5) Build the final choice
     C::from_parts(choice_kind, Value::Object(params))
 }
 

@@ -6,5 +6,5 @@ mod preview;
 pub use estimators::{BasicEstimator, Estimator};
 pub use evaluators::{BasicClassificationEvaluator, PerformanceEvaluator, PerformanceEvaluatorExt};
 pub use measurement::Measurement;
-pub use preview::learning_curve::LearningCurve;
+pub use preview::learning_curve::{CurveFormat, LearningCurve};
 pub use preview::snapshot::Snapshot;
