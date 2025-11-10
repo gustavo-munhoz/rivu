@@ -23,6 +23,12 @@ jobs:
             target: x86_64-unknown-linux-musl
             ext: tar.gz
             musl: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            ext: tar.gz
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            ext: tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
             ext: pkg
@@ -32,6 +38,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             ext: zip
+
     runs-on: ${{ matrix.os }}
     environment: ${{ startsWith(matrix.os, 'macos') && 'release' || '' }}
     steps:
@@ -42,21 +49,69 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Ensure CARGO_HOME and PATH
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "CARGO_HOME=$HOME/.cargo" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Install musl tools (Linux MUSL)
         if: matrix.musl == 'true'
+        shell: bash
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
+      - name: Install cross linkers (Linux ARM gnu)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          case "${{ matrix.target }}" in
+            aarch64-unknown-linux-gnu)
+              sudo apt-get update
+              sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+              mkdir -p .cargo
+              {
+                echo '[target.aarch64-unknown-linux-gnu]'
+                echo 'linker = "aarch64-linux-gnu-gcc"'
+              } >> .cargo/config.toml
+              ;;
+            armv7-unknown-linux-gnueabihf)
+              sudo apt-get update
+              sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+              mkdir -p .cargo
+              {
+                echo '[target.armv7-unknown-linux-gnueabihf]'
+                echo 'linker = "arm-linux-gnueabihf-gcc"'
+              } >> .cargo/config.toml
+              ;;
+          esac
+
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -eux
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Strip (non-Windows)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
+          set -eux
           BIN="target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
-          command -v strip >/dev/null 2>&1 && strip "$BIN" || true
+          case "${{ matrix.target }}" in
+            aarch64-unknown-linux-gnu)       STRIP=aarch64-linux-gnu-strip ;;
+            armv7-unknown-linux-gnueabihf)   STRIP=arm-linux-gnueabihf-strip ;;
+            x86_64-unknown-linux-musl|x86_64-unknown-linux-gnu) STRIP=strip ;;
+            aarch64-apple-darwin|x86_64-apple-darwin) STRIP=strip ;;
+            *) STRIP=strip ;;
+          esac
+          command -v "$STRIP" >/dev/null 2>&1 && "$STRIP" "$BIN" || true
 
       - name: Set up keychain and import Developer ID certs (macOS)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -66,7 +121,6 @@ jobs:
           security default-keychain -s "$KEYCHAIN"
           security unlock-keychain -p "" "$KEYCHAIN"
           security set-keychain-settings -t 3600 -u "$KEYCHAIN"
-
           echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
           security import cert.p12 -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/pkgbuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$KEYCHAIN"
@@ -74,6 +128,7 @@ jobs:
 
       - name: Codesign binary (macOS, Developer ID Application)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           MACOS_CERT_IDENTITY: ${{ secrets.MACOS_CERT_IDENTITY }}
         run: |
@@ -83,19 +138,16 @@ jobs:
 
       - name: Build PKG payload root (macOS)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         run: |
           BIN="target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
           mkdir -p pkgroot/usr/local/bin
           cp "$BIN" pkgroot/usr/local/bin/rivu
           chmod 755 pkgroot/usr/local/bin/rivu
-
-          # optional: ensure /usr/local/bin is on PATH for shells that use path_helper
           mkdir -p scripts
           cat > scripts/postinstall << 'EOF'
           #!/bin/sh
           set -e
-          # Add /usr/local/bin to PATH via path_helper if not present
-          # (most systems already have it; this is a no-op then)
           FILE="/etc/paths.d/rivu"
           if [ ! -f "$FILE" ]; then
             echo "/usr/local/bin" > "$FILE"
@@ -106,6 +158,7 @@ jobs:
 
       - name: Create signed component PKG (macOS, Developer ID Installer)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           MACOS_INSTALLER_CERT_IDENTITY: ${{ secrets.MACOS_INSTALLER_CERT_IDENTITY }}
         run: |
@@ -126,6 +179,7 @@ jobs:
 
       - name: Notarize PKG (macOS)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -142,6 +196,7 @@ jobs:
 
       - name: Staple PKG (macOS)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         run: |
           PKG=$(ls dist/*.pkg)
           xcrun stapler staple "$PKG"
@@ -149,11 +204,11 @@ jobs:
 
       - name: Build Uninstaller PKG (macOS, payload-free)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           MACOS_INSTALLER_CERT_IDENTITY: ${{ secrets.MACOS_INSTALLER_CERT_IDENTITY }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          # Reuse/auto-detect Installer identity
           IDENT="$MACOS_INSTALLER_CERT_IDENTITY"
           if [ -z "$IDENT" ]; then
             IDENT="$(security find-identity -p codesigning -v | awk -F\" '/Developer ID Installer/ {print $2; exit}')"
@@ -162,7 +217,6 @@ jobs:
             echo "::error::No Developer ID Installer identity found."
             exit 1
           fi
-
           mkdir -p scripts-uninstall
           cat > scripts-uninstall/postinstall <<'EOF'
           #!/bin/sh
@@ -173,7 +227,6 @@ jobs:
           exit 0
           EOF
           chmod +x scripts-uninstall/postinstall
-
           UNPKG="rivu-uninstall-${VERSION}-${{ matrix.target }}.pkg"
           pkgbuild \
             --nopayload \
@@ -186,6 +239,7 @@ jobs:
 
       - name: Notarize Uninstaller PKG (macOS)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -203,6 +257,7 @@ jobs:
 
       - name: Staple Uninstaller PKG (macOS)
         if: startsWith(matrix.os, 'macos')
+        shell: bash
         run: |
           set -euo pipefail
           UPKG=$(ls dist/*uninstall*.pkg)
@@ -211,6 +266,7 @@ jobs:
 
       - name: Package (tar.gz)
         if: matrix.ext == 'tar.gz'
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BIN="target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
@@ -240,12 +296,41 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      - name: Generate CHANGELOG from commits with "(closed #N)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || true)"
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+          else
+            RANGE="${CURRENT_TAG}"
+          fi
+          mkdir -p dist
+          {
+            echo "# Changelog"
+            echo
+            echo "## ${CURRENT_TAG}"
+            echo
+            git log ${RANGE} --pretty='%h%x09%s' --no-merges \
+            | awk -F'\t' '$2 ~ /\(closed #[0-9]+\)$/ { print "* " $2 " (" $1 ")"}'
+            echo
+          } > dist/CHANGELOG.md
+          cat dist/CHANGELOG.md
+
       - name: Checksums
+        shell: bash
         run: |
           cd dist
           sha256sum * > SHA256SUMS.txt || shasum -a 256 * > SHA256SUMS.txt
@@ -255,5 +340,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
+          body_path: dist/CHANGELOG.md
           files: |
             dist/*
