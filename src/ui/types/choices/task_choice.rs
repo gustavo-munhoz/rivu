@@ -1,9 +1,27 @@
+use std::path::PathBuf;
 use crate::ui::cli::wizard::prompt_choice;
 use crate::ui::types::choices::{EvaluatorChoice, LearnerChoice, StreamChoice, UIChoice};
+use crate::evaluation::CurveFormat;
 use schemars::{JsonSchema, Schema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use strum_macros::{Display, EnumDiscriminants, EnumIter, EnumMessage, EnumString, IntoStaticStr};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DumpFormat { Csv, Tsv, Json }
+
+impl Default for DumpFormat { fn default() -> Self { DumpFormat::Csv } }
+
+impl From<DumpFormat> for CurveFormat {
+    fn from(value: DumpFormat) -> Self {
+        match value {
+            DumpFormat::Csv => CurveFormat::Csv,
+            DumpFormat::Tsv => CurveFormat::Tsv,
+            DumpFormat::Json => CurveFormat::Json,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PrequentialParams {
@@ -41,6 +59,22 @@ pub struct PrequentialParams {
         range(min = 1)
     )]
     pub mem_check_frequency: u64,
+
+    #[serde(default)]
+    #[schemars(
+        with = "String",
+        title = "Dump file",
+        description = "If set, write all snapshots at the end to this file",
+        extend("format"="path","x-file"=true,"x-must-exist"=false)
+    )]
+    pub dump_file: Option<PathBuf>,
+
+    #[serde(default)]
+    #[schemars(
+        title = "Dump format",
+        description = "csv / tsv / json (default: csv)",
+    )]
+    pub dump_format: DumpFormat,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, EnumDiscriminants)]
@@ -73,6 +107,8 @@ impl UIChoice for TaskChoice {
                 "max_seconds": null,
                 "sample_frequency": 100_000,
                 "mem_check_frequency": 100_000,
+                "dump_file": null,
+                "dump_format": "csv"
             }),
         }
     }
@@ -210,6 +246,8 @@ mod tests {
             max_seconds: None,
             sample_frequency: 1000,
             mem_check_frequency: 1000,
+            dump_file: None,
+            dump_format: DumpFormat::Csv
         };
 
         let v = serde_json::to_value(TaskChoice::EvaluatePrequential(p)).unwrap();
