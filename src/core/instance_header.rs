@@ -1,5 +1,7 @@
 use crate::core::attributes::{Attribute, AttributeRef, NominalAttribute};
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::fmt;
+use std::mem::size_of;
 
 pub struct InstanceHeader {
     relation_name: String,
@@ -66,18 +68,19 @@ impl InstanceHeader {
     }
 
     pub fn calc_memory_size(&self) -> usize {
-        let mut total: usize = 0;
+        MemoryMeter::measure_root(self)
+    }
+}
 
-        total += size_of::<Self>();
+impl MemorySized for InstanceHeader {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
 
-        total += self.relation_name.capacity();
-
-        total += self.attributes.capacity() * size_of::<AttributeRef>();
-
-        for attr_arc in &self.attributes {
-            total += attr_arc.calc_memory_size();
-        }
-
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.relation_name);
+        total += meter.measure_field(&self.attributes);
         total
     }
 }

@@ -3,7 +3,9 @@ use crate::classifiers::conditional_tests::attribute_split_suggestion::Attribute
 use crate::classifiers::hoeffding_tree::instance_conditional_test::NumericAttributeBinaryTest;
 use crate::classifiers::hoeffding_tree::split_criteria::SplitCriterion;
 use crate::core::estimators::gaussian_estimator::GaussianEstimator;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
+use std::mem::size_of;
 pub struct GaussianNumericAttributeClassObserver {
     min_value_observed_per_class: Vec<f64>,
     max_value_observed_per_class: Vec<f64>,
@@ -175,20 +177,7 @@ impl AttributeClassObserver for GaussianNumericAttributeClassObserver {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut total = size_of::<Self>();
-
-        total += self.min_value_observed_per_class.len() * size_of::<f64>();
-        total += self.max_value_observed_per_class.len() * size_of::<f64>();
-
-        total += self.attribute_value_distribution_per_class.len() * size_of::<GaussianEstimator>();
-
-        for est_opt in &self.attribute_value_distribution_per_class {
-            if let Some(est) = est_opt {
-                total += est.calc_memory_size();
-            }
-        }
-
-        total
+        MemoryMeter::measure_root(self)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -197,6 +186,20 @@ impl AttributeClassObserver for GaussianNumericAttributeClassObserver {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+impl MemorySized for GaussianNumericAttributeClassObserver {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
+
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.min_value_observed_per_class);
+        total += meter.measure_field(&self.max_value_observed_per_class);
+        total += meter.measure_field(&self.attribute_value_distribution_per_class);
+        total
     }
 }
 

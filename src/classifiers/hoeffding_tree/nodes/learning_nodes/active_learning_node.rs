@@ -8,8 +8,10 @@ use crate::classifiers::hoeffding_tree::nodes::node::Node;
 use crate::classifiers::hoeffding_tree::split_criteria::SplitCriterion;
 use crate::core::attributes::NominalAttribute;
 use crate::core::instances::Instance;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
 use std::cell::RefCell;
+use std::mem::size_of;
 use std::rc::Rc;
 
 pub struct ActiveLearningNode {
@@ -123,7 +125,11 @@ impl Node for ActiveLearningNode {
         self.observed_class_distribution.clone()
     }
 
-    fn get_class_votes(&self, instance: &dyn Instance, hoeffding_tree: &HoeffdingTree) -> Vec<f64> {
+    fn get_class_votes(
+        &self,
+        _instance: &dyn Instance,
+        _hoeffding_tree: &HoeffdingTree,
+    ) -> Vec<f64> {
         self.observed_class_distribution.clone()
     }
 
@@ -139,28 +145,24 @@ impl Node for ActiveLearningNode {
         Self::num_non_zero_entries(&self.observed_class_distribution) < 2
     }
     fn calc_memory_size(&self) -> usize {
-        let mut total = size_of::<Self>();
-
-        total += size_of::<Vec<f64>>();
-        total += self.observed_class_distribution.len() * size_of::<f64>();
-
-        total += size_of::<Vec<Option<Box<dyn AttributeClassObserver>>>>();
-        for obs_opt in &self.attribute_observers {
-            total += size_of::<Option<Box<dyn AttributeClassObserver>>>();
-            if let Some(obs) = obs_opt {
-                total += size_of::<Box<dyn AttributeClassObserver>>();
-                total += obs.calc_memory_size();
-            }
-        }
-
-        total += size_of::<f64>();
-        total += size_of::<bool>();
-
-        total
+        MemoryMeter::measure_root(self)
     }
 
     fn calc_memory_size_including_subtree(&self) -> usize {
         self.calc_memory_size()
+    }
+}
+
+impl MemorySized for ActiveLearningNode {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
+
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.observed_class_distribution);
+        total += meter.measure_field(&self.attribute_observers);
+        total
     }
 }
 
@@ -305,6 +307,10 @@ mod tests {
             let mut v = self.last_called.borrow_mut();
             *v += 1;
             *v as f64
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            unimplemented!()
         }
     }
 

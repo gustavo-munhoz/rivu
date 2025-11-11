@@ -1,5 +1,8 @@
 use crate::classifiers::hoeffding_tree::instance_conditional_test::instance_conditional_test::InstanceConditionalTest;
 use crate::core::instances::Instance;
+use crate::utils::memory::{MemoryMeter, MemorySized};
+use std::any::Any;
+use std::mem::size_of;
 
 #[derive(Clone)]
 pub struct NominalAttributeMultiwayTest {
@@ -37,11 +40,21 @@ impl InstanceConditionalTest for NominalAttributeMultiwayTest {
     }
 
     fn calc_memory_size(&self) -> usize {
-        size_of::<Self>()
+        MemoryMeter::measure_root(self)
     }
 
     fn clone_box(&self) -> Box<dyn InstanceConditionalTest> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl MemorySized for NominalAttributeMultiwayTest {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
     }
 }
 

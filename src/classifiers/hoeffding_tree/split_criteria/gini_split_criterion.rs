@@ -1,4 +1,7 @@
 use crate::classifiers::hoeffding_tree::split_criteria::split_criterion::SplitCriterion;
+use crate::utils::memory::{MemoryMeter, MemorySized};
+use std::any::Any;
+use std::mem::size_of;
 
 pub struct GiniSplitCriterion {}
 
@@ -18,13 +21,13 @@ impl GiniSplitCriterion {
 }
 
 impl SplitCriterion for GiniSplitCriterion {
-    fn get_range_of_merit(&self, pre_split_distribution: &Vec<f64>) -> f64 {
+    fn get_range_of_merit(&self, _pre_split_distribution: &Vec<f64>) -> f64 {
         1.0
     }
 
     fn get_merit_of_split(
         &self,
-        pre_split_distribution: &[f64],
+        _pre_split_distribution: &[f64],
         post_split_dists: &[Vec<f64>],
     ) -> f64 {
         let mut total_weight = 0.0;
@@ -44,5 +47,19 @@ impl SplitCriterion for GiniSplitCriterion {
         }
 
         1.0 - gini
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl MemorySized for GiniSplitCriterion {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
+
+    fn extra_heap_size(&self, _meter: &mut MemoryMeter) -> usize {
+        0
     }
 }

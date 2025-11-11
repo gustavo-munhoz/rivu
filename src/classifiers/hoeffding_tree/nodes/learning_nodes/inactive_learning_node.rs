@@ -3,8 +3,10 @@ use crate::classifiers::hoeffding_tree::nodes::FoundNode;
 use crate::classifiers::hoeffding_tree::nodes::LearningNode;
 use crate::classifiers::hoeffding_tree::nodes::Node;
 use crate::core::instances::Instance;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
 use std::cell::RefCell;
+use std::mem::size_of;
 use std::rc::Rc;
 
 pub struct InactiveLearningNode {
@@ -46,7 +48,11 @@ impl Node for InactiveLearningNode {
         self.observed_class_distribution.clone()
     }
 
-    fn get_class_votes(&self, instance: &dyn Instance, hoeffding_tree: &HoeffdingTree) -> Vec<f64> {
+    fn get_class_votes(
+        &self,
+        _instance: &dyn Instance,
+        _hoeffding_tree: &HoeffdingTree,
+    ) -> Vec<f64> {
         self.observed_class_distribution.clone()
     }
 
@@ -62,12 +68,7 @@ impl Node for InactiveLearningNode {
         Self::num_non_zero_entries(&self.observed_class_distribution) < 2
     }
     fn calc_memory_size(&self) -> usize {
-        let mut total = size_of::<Self>();
-
-        total += size_of::<Vec<f64>>();
-        total += self.observed_class_distribution.len() * size_of::<f64>();
-
-        total
+        MemoryMeter::measure_root(self)
     }
 
     fn calc_memory_size_including_subtree(&self) -> usize {
@@ -75,8 +76,18 @@ impl Node for InactiveLearningNode {
     }
 }
 
+impl MemorySized for InactiveLearningNode {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
+
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        meter.measure_field(&self.observed_class_distribution)
+    }
+}
+
 impl LearningNode for InactiveLearningNode {
-    fn learn_from_instance(&mut self, instance: &dyn Instance, hoeffding_tree: &HoeffdingTree) {
+    fn learn_from_instance(&mut self, instance: &dyn Instance, _hoeffding_tree: &HoeffdingTree) {
         if let Some(value) = instance.class_value() {
             let weight = instance.weight();
             if value as usize >= self.observed_class_distribution.len() {
