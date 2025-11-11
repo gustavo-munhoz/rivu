@@ -83,7 +83,9 @@ fn main() -> Result<()> {
 
     runner.run().context("runner failed")?;
 
-    if let Some(path) = dump_path {
+    if let Some(path) = dump_path
+        && !path.as_os_str().is_empty()
+    {
         runner
             .curve()
             .export(&path, CurveFormat::from(dump_format))
