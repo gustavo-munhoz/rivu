@@ -149,9 +149,6 @@ pub fn prompt_choice<C: UIChoice, D: PromptDriver>(driver: &D) -> Result<C> {
 
                         if let Some(idx) = none_idx {
                             if selected == "— none —" && start_idx == idx {
-                                // treat "none" as absence; skip insert by returning None
-                                // (the outer `if let Some(val)` will just not insert)
-                                // If you prefer explicit null, return Some(Value::Null) here.
                                 None
                             } else if selected == "— none —" {
                                 None
