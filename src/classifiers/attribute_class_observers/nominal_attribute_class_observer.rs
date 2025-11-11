@@ -4,7 +4,9 @@ use crate::classifiers::hoeffding_tree::instance_conditional_test::{
     NominalAttributeBinaryTest, NominalAttributeMultiwayTest,
 };
 use crate::classifiers::hoeffding_tree::split_criteria::SplitCriterion;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
+use std::mem::size_of;
 
 pub struct NominalAttributeClassObserver {
     total_weight_observed: f64,
@@ -155,14 +157,7 @@ impl AttributeClassObserver for NominalAttributeClassObserver {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut total = size_of::<Self>();
-
-        for inner in &self.attribute_value_distribution_per_class {
-            total += size_of::<Vec<f64>>();
-            total += inner.len() * size_of::<f64>();
-        }
-
-        total
+        MemoryMeter::measure_root(self)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -171,6 +166,16 @@ impl AttributeClassObserver for NominalAttributeClassObserver {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+impl MemorySized for NominalAttributeClassObserver {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
+
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        meter.measure_field(&self.attribute_value_distribution_per_class)
     }
 }
 

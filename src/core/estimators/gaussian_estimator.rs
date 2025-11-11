@@ -1,4 +1,6 @@
 use crate::utils::math::normal_probability;
+use crate::utils::memory::{MemoryMeter, MemorySized};
+use std::mem::size_of;
 
 #[derive(Clone, Debug, Default)]
 pub struct GaussianEstimator {
@@ -98,6 +100,12 @@ impl GaussianEstimator {
     }
 
     pub fn calc_memory_size(&self) -> usize {
+        MemoryMeter::measure_root(self)
+    }
+}
+
+impl MemorySized for GaussianEstimator {
+    fn inline_size(&self) -> usize {
         size_of::<Self>()
     }
 }

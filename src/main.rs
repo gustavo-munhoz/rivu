@@ -157,8 +157,8 @@ fn format_status(
     max_seconds: Option<u64>,
 ) -> String {
     let seen = s.instances_seen;
-    let acc = fmtf(s.accuracy, 12);
-    let kappa = fmtf(s.kappa, 12);
+    let acc = fmtf(s.accuracy * 100.0, 12);
+    let kappa = fmtf(s.kappa * 100.0, 12);
 
     let (mut prec, mut rec, mut f1) = (String::new(), String::new(), String::new());
     if let Some(extras) = snapshot_extras(s) {
@@ -175,8 +175,8 @@ fn format_status(
 
     let mut line = format!(
         "{FG_GREEN}{BOLD}seen{RESET} {:>9}  \
-         {FG_CYAN}{BOLD}acc{RESET} {:>7}  \
-         {FG_MAGENTA}{BOLD}κ{RESET} {:>7} \
+         {FG_CYAN}{BOLD}acc{RESET} {:>7}% \
+         {FG_MAGENTA}{BOLD}κ{RESET} {:>7}% \
          {}{}{}  \
          {DIM}ram_h{RESET} {:>8.16e}  \
          {DIM}t{RESET} {:>7.6}s",

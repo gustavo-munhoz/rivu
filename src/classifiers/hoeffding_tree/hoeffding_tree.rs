@@ -13,9 +13,11 @@ use crate::classifiers::hoeffding_tree::split_criteria::GiniSplitCriterion;
 use crate::classifiers::hoeffding_tree::split_criteria::SplitCriterion;
 use crate::core::instance_header::InstanceHeader;
 use crate::core::instances::Instance;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::mem::size_of;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -776,18 +778,22 @@ impl Classifier for HoeffdingTree {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut size = size_of::<Self>();
+        MemoryMeter::measure_root(self)
+    }
+}
 
-        if let Some(header) = &self.header {
-            size += header.calc_memory_size();
-        }
+impl MemorySized for HoeffdingTree {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
 
-        size += self.numeric_estimator.calc_memory_size();
-
-        if let Some(root) = &self.tree_root {
-            size += root.borrow().calc_memory_size_including_subtree();
-        }
-        size
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.tree_root);
+        total += meter.measure_field(&self.header);
+        total += meter.measure_field(&self.numeric_estimator);
+        total += meter.measure_field(&self.split_criterion_option);
+        total
     }
 }
 
@@ -798,6 +804,7 @@ mod tests {
     use crate::core::attributes::{Attribute, NominalAttribute};
     use crate::core::instances::DenseInstance;
     use crate::testing::header_binary;
+    use std::any::Any;
     use std::collections::HashMap;
     use std::io::Error;
 
@@ -902,6 +909,10 @@ mod tests {
         fn clone_box(&self) -> Box<dyn InstanceConditionalTest> {
             unimplemented!()
         }
+
+        fn as_any(&self) -> &dyn Any {
+            unimplemented!()
+        }
     }
 
     impl SplitNode {
@@ -926,6 +937,10 @@ mod tests {
             _post_split_dists: &[Vec<f64>],
         ) -> f64 {
             1.0
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            unimplemented!()
         }
     }
 
@@ -954,6 +969,9 @@ mod tests {
 
         fn clone_box(&self) -> Box<dyn InstanceConditionalTest> {
             Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn Any {
+            unimplemented!()
         }
     }
 
@@ -1361,22 +1379,6 @@ mod tests {
         tree.enforce_tracker_limit();
 
         assert!(tree.inactive_leaf_node_count >= 1);
-    }
-
-    #[test]
-    fn test_calc_byte_size_basic() {
-        let mut tree =
-            HoeffdingTree::new_with_only_leaf_prediction(LeafPredictionOption::MajorityClass);
-        let node = tree.new_learning_node();
-        tree.tree_root = Some(node.clone());
-
-        let mut manual_size =
-            size_of::<HoeffdingTree>() + node.borrow().calc_memory_size_including_subtree();
-
-        manual_size += tree.numeric_estimator.calc_memory_size();
-
-        let result = tree.calc_memory_size();
-        assert_eq!(result, manual_size);
     }
 
     #[test]

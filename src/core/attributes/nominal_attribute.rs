@@ -1,6 +1,8 @@
 use crate::core::attributes::Attribute;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
 use std::collections::HashMap;
+use std::mem::size_of;
 
 #[derive(Clone)]
 pub struct NominalAttribute {
@@ -62,26 +64,20 @@ impl Attribute for NominalAttribute {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut total: usize = 0;
+        MemoryMeter::measure_root(self)
+    }
+}
 
-        total += size_of::<Self>();
+impl MemorySized for NominalAttribute {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
 
-        total += self.name.capacity();
-
-        total += size_of::<Vec<String>>();
-        total += self.values.capacity() * size_of::<String>();
-        total += self.values.iter().map(|s| s.capacity()).sum::<usize>();
-
-        let cap = self.label_to_index.capacity();
-
-        total += cap * size_of::<(String, usize)>();
-
-        total += self
-            .label_to_index
-            .keys()
-            .map(|k| k.capacity())
-            .sum::<usize>();
-
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.name);
+        total += meter.measure_field(&self.values);
+        total += meter.measure_field(&self.label_to_index);
         total
     }
 }

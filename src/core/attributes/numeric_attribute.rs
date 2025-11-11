@@ -1,5 +1,7 @@
 use crate::core::attributes::Attribute;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
+use std::mem::size_of;
 
 #[derive(Clone)]
 pub struct NumericAttribute {
@@ -35,16 +37,19 @@ impl Attribute for NumericAttribute {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut total: usize = 0;
+        MemoryMeter::measure_root(self)
+    }
+}
 
-        total += size_of::<Self>();
+impl MemorySized for NumericAttribute {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
 
-        total += self.name.capacity();
-
-        total += size_of::<Vec<u32>>();
-
-        total += self.values.capacity() * size_of::<u32>();
-
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.name);
+        total += meter.measure_field(&self.values);
         total
     }
 }

@@ -5,6 +5,8 @@ use crate::classifiers::classifier::Classifier;
 use crate::core::attributes::NominalAttribute;
 use crate::core::instance_header::InstanceHeader;
 use crate::core::instances::Instance;
+use crate::utils::memory::{MemoryMeter, MemorySized};
+use std::mem::size_of;
 use std::sync::Arc;
 
 pub struct NaiveBayes {
@@ -173,26 +175,20 @@ impl Classifier for NaiveBayes {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut total: usize = 0;
+        MemoryMeter::measure_root(self)
+    }
+}
 
-        total += size_of::<Option<Arc<InstanceHeader>>>();
-        if let Some(header) = &self.header {
-            total += header.calc_memory_size();
-        }
+impl MemorySized for NaiveBayes {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
 
-        total += size_of::<Vec<f64>>();
-        total += self.observed_class_distribution.capacity() * size_of::<f64>();
-
-        total += size_of::<Vec<Option<Box<dyn AttributeClassObserver>>>>();
-        total += self.attribute_observers.capacity()
-            * size_of::<Option<Box<dyn AttributeClassObserver>>>();
-
-        for obs_opt in &self.attribute_observers {
-            if let Some(obs) = obs_opt.as_ref() {
-                total += obs.calc_memory_size();
-            }
-        }
-
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.header);
+        total += meter.measure_field(&self.observed_class_distribution);
+        total += meter.measure_field(&self.attribute_observers);
         total
     }
 }

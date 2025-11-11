@@ -3,8 +3,10 @@ use crate::classifiers::hoeffding_tree::instance_conditional_test::InstanceCondi
 use crate::classifiers::hoeffding_tree::nodes::found_node::FoundNode;
 use crate::classifiers::hoeffding_tree::nodes::node::Node;
 use crate::core::instances::Instance;
+use crate::utils::memory::{MemoryMeter, MemorySized};
 use std::any::Any;
 use std::cell::RefCell;
+use std::mem::size_of;
 use std::rc::Rc;
 
 pub struct SplitNode {
@@ -109,7 +111,11 @@ impl Node for SplitNode {
         sum_observed_class_distribution_at_leaves
     }
 
-    fn get_class_votes(&self, instance: &dyn Instance, hoeffding_tree: &HoeffdingTree) -> Vec<f64> {
+    fn get_class_votes(
+        &self,
+        _instance: &dyn Instance,
+        _hoeffding_tree: &HoeffdingTree,
+    ) -> Vec<f64> {
         self.observed_class_distribution.clone()
     }
 
@@ -126,26 +132,24 @@ impl Node for SplitNode {
     }
 
     fn calc_memory_size(&self) -> usize {
-        let mut total = size_of::<Self>();
-
-        total += size_of::<Vec<f64>>();
-        total += self.observed_class_distribution.len() * size_of::<f64>();
-        total += size_of::<Option<Rc<RefCell<dyn Node>>>>();
-
-        total += self.split_test.calc_memory_size();
-
-        total
+        MemoryMeter::measure_root(self)
     }
 
     fn calc_memory_size_including_subtree(&self) -> usize {
-        let mut total = self.calc_memory_size();
+        MemoryMeter::measure_root(self)
+    }
+}
 
-        for child in &self.children {
-            if let Some(child_rc) = child {
-                total += child_rc.borrow().calc_memory_size_including_subtree();
-            }
-        }
+impl MemorySized for SplitNode {
+    fn inline_size(&self) -> usize {
+        size_of::<Self>()
+    }
 
+    fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
+        let mut total = 0;
+        total += meter.measure_field(&self.observed_class_distribution);
+        total += meter.measure_field(&self.split_test);
+        total += meter.measure_field(&self.children);
         total
     }
 }
@@ -188,6 +192,10 @@ mod tests {
 
         fn clone_box(&self) -> Box<dyn InstanceConditionalTest> {
             Box::new(self.clone())
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
         }
     }
 
