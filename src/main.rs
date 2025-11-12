@@ -5,9 +5,11 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use clap::Parser;
 
 use rivu::evaluation::{CurveFormat, Snapshot};
 use rivu::tasks::PrequentialEvaluator;
+use rivu::ui::cli::args::{Cli, Command};
 use rivu::ui::cli::{drivers::InquireDriver, wizard::prompt_choice};
 use rivu::ui::types::build::{build_evaluator, build_learner, build_stream};
 use rivu::ui::types::choices::{DumpFormat, TaskChoice};
@@ -22,10 +24,15 @@ const FG_BLUE: &str = "\x1b[34m";
 const FG_GREY: &str = "\x1b[90m";
 
 fn main() -> Result<()> {
-    let driver = InquireDriver;
+    let cli = Cli::parse();
 
-    let task: TaskChoice =
-        prompt_choice::<TaskChoice, _>(&driver).context("failed while prompting for task")?;
+    let task: TaskChoice = match cli.command {
+        Some(Command::Run(args)) => args.into_task_choice()?,
+        None => {
+            let driver = InquireDriver;
+            prompt_choice::<TaskChoice, _>(&driver).context("failed while prompting for task")?
+        }
+    };
 
     let render: JoinHandle<()>;
 

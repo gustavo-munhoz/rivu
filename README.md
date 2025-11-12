@@ -24,6 +24,22 @@ cargo run
 ```
 Select the prequential evaluation task and answer the wizard prompts for stream, evaluator, and learner. The runner prints a header describing the session and refreshes a live status line with metrics, throughput, and progress bars.
 
+### Run a task non-interactively
+If you already know the configuration you want, the `rivu run` subcommand lets you provide everything up front without stepping through the wizard. The flags mirror the wizard prompts and accept additional `--*-param key=value` overrides for nested settings.
+
+For example, the following command mirrors MOA's `EvaluatePrequential` invocation shown above, training a Hoeffding Tree on the `covtypeNorm.arff` stream while reporting basic classification metrics:
+
+```bash
+rivu run \
+  --task evaluate-prequential \
+  --learner hoeffding-tree \
+  --stream arff-file \
+  --evaluator basic-classification \
+  --stream-param path=/Users/rafaelvenetikides/Developer/rivu/data/covtypeNorm.arff
+```
+
+The `split_criterion` in the Hoeffding Tree defaults to Gini (matching MOA's `-s GiniSplitCriterion` flag), so no extra learner override is required. If a value contains spaces, wrap it in quotes so the shell passes it through as a single argument. Any unspecified flags fall back to the same defaults used by the interactive wizard.
+
 ### Run the test suite
 ```bash
 cargo test
