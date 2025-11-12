@@ -10,6 +10,7 @@ description = "A MOA-inspired project to optimize Naive Bayes and Hoeffding Tree
 test-support = []
 
 [dependencies]
+clap = { version = "4.5.20", features = ["derive"] }
 tempfile = "3.20.0"
 rand = "0.9.2"
 serde = { version = "1.0.219", features = ["derive"] }
