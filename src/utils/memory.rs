@@ -117,7 +117,7 @@ impl<T: MemorySized> MemorySized for Option<T> {
 
     fn extra_heap_size(&self, meter: &mut MemoryMeter) -> usize {
         match self {
-            Some(value) => meter.measure_field(value),
+            Some(value) => value.extra_heap_size(meter),
             None => 0,
         }
     }
@@ -183,5 +183,33 @@ where
             total += meter.measure_field(v);
         }
         total
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::memory::{MemoryMeter, MemorySized};
+
+    #[test]
+    fn option_arc_deep_measured() {
+        use std::sync::Arc;
+
+        #[derive(Default)]
+        struct Big { v: Vec<u8> }
+        impl MemorySized for Big {
+            fn extra_heap_size(&self, _m: &mut MemoryMeter) -> usize {
+                self.v.capacity()
+            }
+        }
+
+        let mut big = Big::default();
+        big.v.resize(10_000, 0);
+
+        let hdr = Arc::new(big);
+        let opt = Some(hdr.clone());
+
+        let sz = MemoryMeter::measure_root(&opt);
+        assert!(sz >= std::mem::size_of::<Option<Arc<Big>>>());
+        assert!(sz >= 10_000);
     }
 }
